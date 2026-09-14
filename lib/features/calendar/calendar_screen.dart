@@ -49,7 +49,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final serviceDetailsController = TextEditingController();
     final bookingType = _isStaff ? 'staffFacility' : 'studentService';
     final options = _isStaff
-        ? await _dbService.getDepartmentsOnce()        : await _dbService.getDepartmentsOnce();
+        ? await _dbService.getDepartmentsOnce()
+        : await _dbService.getDepartmentsOnce();
     if (options.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -426,7 +427,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
               optionsSnapshot.data ??
               (_isStaff
                   ? DatabaseService.defaultDepartments
-
                   : DatabaseService.defaultDepartments);
 
           return Column(
@@ -438,12 +438,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ),
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: _isStaff
-                      ? _dbService.getLiveQueue()
-                      : _dbService.getQueueForRole(
-                          role: _role,
-                          email: user?.email ?? '',
-                        ),
+                  stream: _dbService.getQueueForRole(
+                    role: _role,
+                    email: user?.email ?? '',
+                  ),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -461,6 +459,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           date.day == _selectedDate.day;
                       if (!sameDay) return false;
                       if (_isAdmin) return true;
+                      if (_isStaff) return false;
                       return bookingBelongsTo(
                             data,
                             email: user?.email,

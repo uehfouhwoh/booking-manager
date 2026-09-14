@@ -455,54 +455,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _showStaffFacilitySummaryDialog() async {
-    final snapshot = await FirebaseFirestore.instance.collection('queue').get();
-    final docs = snapshot.docs.where((doc) {
-      final data = doc.data();
-      return data['bookingType'] == 'staffFacility' &&
-          bookingBelongsTo(
-            data,
-            email: currentUser?.email,
-            uid: currentUser?.uid,
-          ) &&
-          !bookingHiddenFor(
-            data,
-            email: currentUser?.email,
-            uid: currentUser?.uid,
-          );
-    }).toList();
-    final approved = docs
-        .where((doc) => doc.data()['status'] == 'Booked')
-        .length;
-    final completed = docs
-        .where((doc) => doc.data()['status'] == 'Completed')
-        .length;
-    final pending = docs
-        .where((doc) => doc.data()['status'] == 'Pending')
-        .length;
-
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('My Facility Summary'),
-        content: Text(
-          'Facility requests: ${docs.length}\n'
-          'Pending approval: $pending\n'
-          'Approved to use: $approved\n'
-          'Completed facility use: $completed\n\n'
-          'Use the Facilities page to mark approved bookings as done after using the room, lab, or equipment.',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {

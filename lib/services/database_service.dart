@@ -891,29 +891,4 @@ class DatabaseService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
-
-  Stream<QuerySnapshot> getGroupMessages() {
-    return _firestore
-        .collection('groupMessages')
-        .orderBy('createdAt', descending: true)
-        .limit(80)
-        .snapshots();
-  }
-
-  Future<void> sendGroupMessage({
-    required String message,
-    required String authorName,
-    required String authorUid,
-    required String authorEmail,
-    required String authorRole,
-  }) async {
-    await _firestore.collection('groupMessages').add({
-      'message': message,
-      'authorName': authorName,
-      'authorUid': authorUid,
-      'authorEmail': authorEmail,
-      'authorRole': authorRole,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
 }
