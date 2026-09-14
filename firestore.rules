@@ -1,0 +1,211 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function role() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? userDoc().data.role
+        : 'student';
+    }
+
+    function isAdmin() {
+      return signedIn() && role() == 'admin';
+    }
+
+    function isStaffOrLecturer() {
+      return signedIn() && (role() == 'staff' || role() == 'lecturer');
+    }
+
+    function requestAuthorIsSignedInUser() {
+      return signedIn() &&
+        request.resource.data.keys().hasAny(['authorUid']) &&
+        request.resource.data.authorUid == request.auth.uid;
+    }
+
+    function resourceAuthorIsSignedInUser() {
+      return signedIn() &&
+        (
+          (
+            resource.data.keys().hasAny(['authorUid']) &&
+            resource.data.authorUid == request.auth.uid
+          ) ||
+          (
+            resource.data.keys().hasAny(['authorEmail']) &&
+            resource.data.authorEmail == request.auth.token.email
+          )
+        );
+    }
+
+    function bookingEmail(data) {
+      return data.keys().hasAny(['requesterEmail'])
+        ? data.requesterEmail
+        : data.keys().hasAny(['studentEmail'])
+        ? data.studentEmail
+        : '';
+    }
+
+    function bookingType(data) {
+      return data.keys().hasAny(['bookingType'])
+        ? data.bookingType
+        : 'studentService';
+    }
+
+    function bookingUid(data) {
+      return data.keys().hasAny(['requesterUid'])
+        ? data.requesterUid
+        : data.keys().hasAny(['studentUid'])
+        ? data.studentUid
+        : '';
+    }
+
+    function bookingBelongsToSignedInUser(data) {
+      return signedIn() &&
+        (
+          bookingUid(data) == request.auth.uid ||
+          bookingEmail(data) == request.auth.token.email
+        );
+    }
+
+    function requesterRoleMatchesAccount(data) {
+      return data.keys().hasAny(['requesterRole']) &&
+        data.requesterRole == role();
+    }
+
+    function canCreateBookingForRole(data) {
+      return bookingType(data) == 'staffFacility'
+        ? isStaffOrLecturer()
+        : role() == 'student';
+    }
+
+    function ownerStatusUpdateOnly() {
+      return bookingBelongsToSignedInUser(resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'updatedAt',
+          'cancellationReason',
+          'completedAt'
+        ]) &&
+        (
+          request.resource.data.status == 'Cancelled' ||
+          request.resource.data.status == 'Completed'
+        );
+    }
+
+    function hiddenUids(data) {
+      return data.keys().hasAny(['hiddenForUids']) ? data.hiddenForUids : [];
+    }
+
+    function ownerVisibilityUpdateOnly() {
+      return bookingBelongsToSignedInUser(resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'hiddenForUids',
+          'hiddenForEmails',
+          'updatedAt'
+        ]) &&
+        (
+          hiddenUids(resource.data).hasAny([request.auth.uid]) ||
+          hiddenUids(request.resource.data).hasAny([request.auth.uid])
+        );
+    }
+
+    function createsOwnBooking() {
+      return signedIn() &&
+        bookingBelongsToSignedInUser(request.resource.data) &&
+        requesterRoleMatchesAccount(request.resource.data) &&
+        canCreateBookingForRole(request.resource.data);
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn() &&
+        userId == request.auth.uid &&
+        request.resource.data.role == 'student';
+      allow read: if signedIn() && (userId == request.auth.uid || isAdmin());
+      allow update: if signedIn() &&
+        (
+          isAdmin() ||
+          (
+            userId == request.auth.uid &&
+            request.resource.data.role == resource.data.role
+          )
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /queue/{bookingId} {
+      allow create: if createsOwnBooking() || isAdmin();
+      allow read: if signedIn();
+      allow update: if isAdmin() || ownerStatusUpdateOnly() || ownerVisibilityUpdateOnly();
+      allow delete: if isAdmin();
+    }
+
+    match /bookingSlots/{slotId} {
+      allow read: if signedIn();
+      allow create: if signedIn() &&
+        canCreateBookingForRole(request.resource.data) &&
+        request.resource.data.requesterUid == request.auth.uid;
+      allow update, delete: if isAdmin() ||
+        (
+          signedIn() &&
+          resource.data.requesterUid == request.auth.uid
+        );
+    }
+
+    match /settings/{settingId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      allow create: if signedIn() &&
+        (isAdmin() || isStaffOrLecturer()) &&
+        requestAuthorIsSignedInUser();
+      allow update, delete: if isAdmin() ||
+        (
+          signedIn() &&
+          isStaffOrLecturer() &&
+          resourceAuthorIsSignedInUser()
+        );
+    }
+
+    match /blogPosts/{postId} {
+      allow read: if signedIn();
+      allow create: if signedIn() &&
+        requestAuthorIsSignedInUser();
+      allow update, delete: if isAdmin() ||
+        (
+          signedIn() &&
+          resourceAuthorIsSignedInUser()
+        );
+    }
+
+    match /feedback/{feedbackId} {
+      allow create: if signedIn() &&
+        isStaffOrLecturer() &&
+        requestAuthorIsSignedInUser();
+      allow read: if isAdmin() ||
+        (
+          signedIn() &&
+          resourceAuthorIsSignedInUser()
+        );
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /groupMessages/{messageId} {
+      allow read: if signedIn();
+      allow create: if signedIn() &&
+        requestAuthorIsSignedInUser();
+      allow update, delete: if isAdmin();
+    }
+  }
+}

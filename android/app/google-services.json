@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "663917254212",
+    "project_id": "flowslot-booking-system",
+    "storage_bucket": "flowslot-booking-system.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:663917254212:android:b7f455ec9667f5a8c1ce11",
+        "android_client_info": {
+          "package_name": "com.example.booking_system"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBA-7sypzqrrXkLUhi95xGztA8Ud3fDSbo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

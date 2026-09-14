@@ -1,0 +1,29 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "flowslot-booking-system",
+          "appId": "1:663917254212:android:b7f455ec9667f5a8c1ce11",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "flowslot-booking-system",
+          "configurations": {
+            "android": "1:663917254212:android:b7f455ec9667f5a8c1ce11",
+            "ios": "1:663917254212:ios:4db14e64512b9cc6c1ce11",
+            "macos": "1:663917254212:ios:4db14e64512b9cc6c1ce11",
+            "web": "1:663917254212:web:193ee2974e8d6bfdc1ce11",
+            "windows": "1:663917254212:web:12551840ffa30dd3c1ce11"
+          }
+        }
+      }
+    }
+  }
+}
