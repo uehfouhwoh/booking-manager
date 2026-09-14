@@ -527,7 +527,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           date.day == _selectedDate.day;
                       if (!sameDay) return false;
                       if (_isAdmin) return true;
-                      if (_isStaff) return false;
                       return bookingBelongsTo(
                             data,
                             email: user?.email,
