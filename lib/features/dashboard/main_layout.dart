@@ -5,7 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'visits_screen.dart';
 import '../calendar/booking_requests_screen.dart';
 import '../calendar/calendar_screen.dart';
+import '../community/campus_hub_screen.dart';
+import '../info/info_screen.dart';
 import '../profile/profile_screen.dart';
+import '../student/student_home_screen.dart';
 import '../../services/auth_service.dart';
 
 class MainLayout extends StatefulWidget {
@@ -52,66 +55,96 @@ class _MainLayoutState extends State<MainLayout> {
     }
 
     final isAdmin = _role == 'admin';
-    final isStaff = _role == 'staff';
+    final isStaff = _role == 'staff' || _role == 'lecturer';
 
     final screens = isAdmin
         ? const [VisitsScreen(), BookingRequestsScreen(), ProfileScreen()]
         : isStaff
-        ? const [CalendarScreen(), ProfileScreen()]
-        : const [CalendarScreen(), ProfileScreen()];
+        ? const [CalendarScreen(), CampusHubScreen(), InfoScreen(), ProfileScreen()]
+        : const [
+            StudentHomeScreen(),
+            CalendarScreen(),
+            CampusHubScreen(),
+            InfoScreen(),
+            ProfileScreen(),
+          ];
 
     final items = isAdmin
         ? const [
-            BottomNavigationBarItem(
+            NavigationDestination(
               icon: Icon(Icons.admin_panel_settings_outlined),
+              selectedIcon: Icon(Icons.admin_panel_settings),
               label: 'Manage',
             ),
-            BottomNavigationBarItem(
+            NavigationDestination(
               icon: Icon(Icons.fact_check_outlined),
+              selectedIcon: Icon(Icons.fact_check),
               label: 'Approvals',
             ),
-            BottomNavigationBarItem(
+            NavigationDestination(
               icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
               label: 'Profile',
             ),
           ]
         : isStaff
         ? const [
-            BottomNavigationBarItem(
+            NavigationDestination(
               icon: Icon(Icons.meeting_room_outlined),
+              selectedIcon: Icon(Icons.meeting_room),
               label: 'Facilities',
             ),
-            BottomNavigationBarItem(
+            NavigationDestination(
+              icon: Icon(Icons.campaign_outlined),
+              selectedIcon: Icon(Icons.campaign),
+              label: 'Campus Hub',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.info_outline),
+              selectedIcon: Icon(Icons.info),
+              label: 'Info',
+            ),
+            NavigationDestination(
               icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
               label: 'Profile',
             ),
           ]
         : const [
-            BottomNavigationBarItem(
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            NavigationDestination(
               icon: Icon(Icons.edit_calendar_outlined),
+              selectedIcon: Icon(Icons.edit_calendar),
               label: 'Booking',
             ),
-            BottomNavigationBarItem(
+            NavigationDestination(
+              icon: Icon(Icons.campaign_outlined),
+              selectedIcon: Icon(Icons.campaign),
+              label: 'Campus Hub',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.info_outline),
+              selectedIcon: Icon(Icons.info),
+              label: 'Info',
+            ),
+            NavigationDestination(
               icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
               label: 'Profile',
             ),
           ];
 
     return Scaffold(
-      body: screens[_currentIndex],
+      body: IndexedStack(index: _currentIndex, children: screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) => setState(() => _currentIndex = index),
-        height: 72,
-        destinations: items
-            .map(
-              (item) => NavigationDestination(
-                icon: item.icon,
-                selectedIcon: item.activeIcon,
-                label: item.label ?? '',
-              ),
-            )
-            .toList(),
+        height: 76,
+        destinations: items,
       ),
     );
   }
