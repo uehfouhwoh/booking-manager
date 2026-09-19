@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../core/app_design.dart';
 import '../../core/app_helpers.dart';
+import '../../core/responsive_page.dart';
 import '../../services/auth_service.dart';
 import '../../services/database_service.dart';
 import 'booking_history_screen.dart';
@@ -120,9 +122,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Color _roleColor() {
     return switch (_role) {
-      'admin' => const Color(0xFF2563EB),
-      'staff' => const Color(0xFF7C3AED),
-      _ => const Color(0xFF059669),
+      'admin' => AppColors.primary,
+      'staff' => AppColors.purple,
+      _ => AppColors.green,
     };
   }
 
@@ -210,11 +212,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              child: const Text('Cancel'),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
               ),
               onPressed: () async {
@@ -259,7 +261,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
-                  child: CircularProgressIndicator(color: Colors.deepPurple),
+                  child: CircularProgressIndicator(color: AppColors.primary),
                 );
               }
 
@@ -274,7 +276,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 itemCount: departments.length,
                 itemBuilder: (context, index) => ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.domain, color: Colors.deepPurple),
+                  leading: const Icon(Icons.domain, color: AppColors.primary),
                   title: Text(
                     departments[index],
                     style: const TextStyle(fontSize: 14),
@@ -282,7 +284,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   trailing: IconButton(
                     icon: const Icon(
                       Icons.delete_outline,
-                      color: Colors.red,
+                      color: AppColors.red,
                       size: 20,
                     ),
                     onPressed: () async {
@@ -314,11 +316,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: Colors.grey)),
+            child: const Text('Close'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
             ),
             onPressed: () {
@@ -350,11 +352,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
             ),
             onPressed: () async {
@@ -379,6 +381,137 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showFacilitiesDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Manage Staff Facilities'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: StreamBuilder<List<String>>(
+            stream: _dbService.getFacilities(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final facilities = snapshot.data ?? [];
+              if (facilities.isEmpty) {
+                return const Center(child: Text('No facilities found.'));
+              }
+
+              return ListView.builder(
+                shrinkWrap: true,
+                itemCount: facilities.length,
+                itemBuilder: (context, index) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.meeting_room_outlined,
+                    color: Color(0xFF7C3AED),
+                  ),
+                  title: Text(
+                    facilities[index],
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.red,
+                      size: 20,
+                    ),
+                    onPressed: () async {
+                      try {
+                        await _dbService.removeFacility(facilities[index]);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${facilities[index]} deleted.'),
+                          ),
+                        );
+                      } catch (error) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Could not delete facility: $error'),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C3AED),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _showAddFacilityDialog();
+            },
+            child: const Text('Add New'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddFacilityDialog() {
+    final TextEditingController facilityController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Staff Facility'),
+        content: TextField(
+          controller: facilityController,
+          decoration: const InputDecoration(
+            labelText: 'Facility Name',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C3AED),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              if (facilityController.text.trim().isNotEmpty) {
+                try {
+                  await _dbService.addFacility(facilityController.text.trim());
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  _showFacilitiesDialog();
+                } catch (error) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Could not add facility: $error')),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- HELP & SUPPORT ---
   void _showHelpDialog() {
     showDialog(
@@ -386,7 +519,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (context) => AlertDialog(
         title: Row(
           children: const [
-            Icon(Icons.support_agent, color: Colors.deepPurple),
+            Icon(Icons.support_agent, color: AppColors.primary),
             SizedBox(width: 8),
             Text('Help & Support'),
           ],
@@ -402,7 +535,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text(
               'Close',
-              style: TextStyle(color: Colors.deepPurple),
+              style: TextStyle(color: AppColors.primary),
             ),
           ),
         ],
@@ -455,12 +588,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _showStaffFacilitySummaryDialog() async {
+    final snapshot = await FirebaseFirestore.instance.collection('queue').get();
+    final docs = snapshot.docs.where((doc) {
+      final data = doc.data();
+      return data['bookingType'] == 'staffFacility' &&
+          bookingBelongsTo(
+            data,
+            email: currentUser?.email,
+            uid: currentUser?.uid,
+          ) &&
+          !bookingHiddenFor(
+            data,
+            email: currentUser?.email,
+            uid: currentUser?.uid,
+          );
+    }).toList();
+    final approved = docs
+        .where((doc) => doc.data()['status'] == 'Booked')
+        .length;
+    final completed = docs
+        .where((doc) => doc.data()['status'] == 'Completed')
+        .length;
+    final pending = docs
+        .where((doc) => doc.data()['status'] == 'Pending')
+        .length;
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('My Facility Summary'),
+        content: Text(
+          'Facility requests: ${docs.length}\n'
+          'Pending approval: $pending\n'
+          'Approved to use: $approved\n'
+          'Completed facility use: $completed\n\n'
+          'Use the Facilities page to mark approved bookings as done after using the room, lab, or equipment.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAdminSystemReportDialog() async {
+    final snapshot = await FirebaseFirestore.instance.collection('queue').get();
+    final docs = snapshot.docs;
+    final pending = docs
+        .where((doc) => doc.data()['status'] == 'Pending')
+        .length;
+    final booked = docs.where((doc) => doc.data()['status'] == 'Booked').length;
+    final completed = docs
+        .where((doc) => doc.data()['status'] == 'Completed')
+        .length;
+    final staff = docs
+        .where((doc) => doc.data()['bookingType'] == 'staffFacility')
+        .length;
+    final students = docs.length - staff;
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('System Report'),
+        content: Text(
+          'Total records: ${docs.length}\n'
+          'Pending approval: $pending\n'
+          'Approved bookings: $booked\n'
+          'Completed bookings: $completed\n'
+          'Student service records: $students\n'
+          'Staff facility records: $staff',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(color: Colors.deepPurple),
+          child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
     }
@@ -475,20 +694,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Campus Profile',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        elevation: 0,
+        title: const Text('Campus Profile'),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
+            tooltip: 'Edit profile',
             onPressed: _showEditProfileDialog,
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: ResponsiveListView(
         children: [
           _ProfileHero(
             displayName: _displayName,
@@ -501,10 +716,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 32),
 
           if (isAdmin) ...[
-            const Text(
-              'Admin Settings',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const _SettingsHeading('Admin Settings'),
             const SizedBox(height: 12),
             _buildSettingsTile(
               context,
@@ -513,6 +725,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               subtitle: 'Add or remove campus departments',
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: _showDepartmentsDialog,
+            ),
+            _buildSettingsTile(
+              context,
+              icon: Icons.meeting_room_outlined,
+              title: 'Manage Staff Facilities',
+              subtitle: 'Add or remove rooms, labs, equipment, and spaces',
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: _showFacilitiesDialog,
             ),
             _buildSettingsTile(
               context,
@@ -547,17 +767,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     );
                   }
                 },
-                activeThumbColor: Colors.deepPurple,
+                activeThumbColor: AppColors.primary,
               ),
+            ),
+            _buildSettingsTile(
+              context,
+              icon: Icons.summarize_outlined,
+              title: 'System Report',
+              subtitle: 'View live totals for student and staff bookings',
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: _showAdminSystemReportDialog,
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          if (isStaff) ...[
+            const _SettingsHeading('Staff Workspace'),
+            const SizedBox(height: 12),
+            _buildSettingsTile(
+              context,
+              icon: Icons.meeting_room_outlined,
+              title: 'Facility Booking History',
+              subtitle: 'Review your room, lab, and equipment requests',
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const BookingHistoryScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildSettingsTile(
+              context,
+              icon: Icons.visibility_off_outlined,
+              title: 'Hidden Facility Bookings',
+              subtitle: 'Restore room, lab, or equipment records you hid',
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        const BookingHistoryScreen(showHidden: true),
+                  ),
+                );
+              },
+            ),
+            _buildSettingsTile(
+              context,
+              icon: Icons.assignment_turned_in_outlined,
+              title: 'My Facility Summary',
+              subtitle: 'See pending, approved, and completed facility use',
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: _showStaffFacilitySummaryDialog,
             ),
             const SizedBox(height: 24),
           ],
 
           if (!isAdmin && !isStaff) ...[
-            const Text(
-              'Student Workspace',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const _SettingsHeading('Student Workspace'),
             const SizedBox(height: 12),
             _buildSettingsTile(
               context,
@@ -586,10 +856,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
           ],
 
-          const Text(
-            'Account',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          const _SettingsHeading('Account'),
           const SizedBox(height: 12),
 
           if (!isAdmin && !isStaff)
@@ -645,7 +912,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   );
                 }
               },
-              activeThumbColor: Colors.deepPurple,
+              activeThumbColor: AppColors.primary,
             ),
           ),
           _buildSettingsTile(
@@ -658,9 +925,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildSettingsTile(
             context,
             icon: Icons.logout,
-            title: 'Log Out',
-            titleColor: Colors.red,
-            iconColor: Colors.red,
+              title: 'Log Out',
+            titleColor: AppColors.red,
+            iconColor: AppColors.red,
             onTap: () async {
               await AuthService().logOut();
             },
@@ -684,33 +951,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
-        side: BorderSide(color: Colors.grey.shade200),
-        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: ListTile(
         onTap: onTap ?? () {},
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: (iconColor ?? Colors.deepPurple).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+            color: (iconColor ?? AppColors.primary).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
-          child: Icon(icon, color: iconColor ?? Colors.deepPurple),
+          child: Icon(icon, color: iconColor ?? AppColors.primary),
         ),
         title: Text(
           title,
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            color: titleColor ?? Colors.black87,
+            color: titleColor ?? AppColors.ink,
           ),
         ),
         subtitle: subtitle != null
             ? Text(
                 subtitle,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
               )
             : null,
         trailing: trailing,
+      ),
+    );
+  }
+}
+
+class _SettingsHeading extends StatelessWidget {
+  const _SettingsHeading(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: AppColors.ink,
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
       ),
     );
   }

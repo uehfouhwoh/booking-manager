@@ -3,7 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/app_design.dart';
 import '../../core/app_helpers.dart';
+import '../../core/responsive_page.dart';
 import '../../services/database_service.dart';
 
 class BookingRequestsScreen extends StatefulWidget {
@@ -176,57 +178,79 @@ class _BookingRequestsScreenState extends State<BookingRequestsScreen> {
       appBar: AppBar(
         title: Text(_isAdmin ? 'Admin Approvals' : 'My Pending Requests'),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _isAdmin
-            ? _dbService.getPendingRequests()
-            : _dbService.getUserBookings(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: ResponsivePageFrame(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+              child: AppSectionHeader(
+                icon: _isAdmin
+                    ? Icons.fact_check_outlined
+                    : Icons.pending_actions_outlined,
+                title: _isAdmin ? 'Approval queue' : 'Pending requests',
+                subtitle: _isAdmin
+                    ? 'Review student service and staff facility requests before they become confirmed bookings.'
+                    : 'Track requests waiting for admin approval.',
+              ),
+            ),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _isAdmin
+                    ? _dbService.getPendingRequests()
+                    : _dbService.getUserBookings(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-          if (snapshot.hasError) {
-            return Center(child: Text('Database error: ${snapshot.error}'));
-          }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text('Database error: ${snapshot.error}'),
+                    );
+                  }
 
-          var docs = snapshot.data?.docs ?? [];
-          if (!_isAdmin) {
-            docs = docs.where((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              return bookingBelongsTo(
-                    data,
-                    email: currentUser?.email,
-                    uid: currentUser?.uid,
-                  ) &&
-                  data['status'] == 'Pending' &&
-                  !bookingHiddenFor(
-                    data,
-                    email: currentUser?.email,
-                    uid: currentUser?.uid,
+                  var docs = snapshot.data?.docs ?? [];
+                  if (!_isAdmin) {
+                    docs = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      return bookingBelongsTo(
+                            data,
+                            email: currentUser?.email,
+                            uid: currentUser?.uid,
+                          ) &&
+                          data['status'] == 'Pending' &&
+                          !bookingHiddenFor(
+                            data,
+                            email: currentUser?.email,
+                            uid: currentUser?.uid,
+                          );
+                    }).toList();
+                  }
+
+                  if (docs.isEmpty) {
+                    return _EmptyApprovals(isAdmin: _isAdmin);
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final doc = docs[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      return _ApprovalCard(
+                        data: data,
+                        isAdmin: _isAdmin,
+                        onApprove: () => _showApproveDialog(doc.id, data),
+                        onDecline: () => _showDeclineDialog(doc.id),
+                        onCancel: () => _showCancelDialog(doc.id),
+                      );
+                    },
                   );
-            }).toList();
-          }
-
-          if (docs.isEmpty) {
-            return _EmptyApprovals(isAdmin: _isAdmin);
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final doc = docs[index];
-              final data = doc.data() as Map<String, dynamic>;
-              return _ApprovalCard(
-                data: data,
-                isAdmin: _isAdmin,
-                onApprove: () => _showApproveDialog(doc.id, data),
-                onDecline: () => _showDeclineDialog(doc.id),
-                onCancel: () => _showCancelDialog(doc.id),
-              );
-            },
-          );
-        },
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -265,6 +289,7 @@ class _ApprovalCardState extends State<_ApprovalCard> {
         ? minutesUntil(scheduled.toDate())
         : (data['minutesUntilAppointment'] as int?) ?? 0;
     final isFacility = data['bookingType'] == 'staffFacility';
+    final accent = isFacility ? AppColors.purple : AppColors.primary;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
@@ -285,15 +310,14 @@ class _ApprovalCardState extends State<_ApprovalCard> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: (isFacility ? Colors.purple : Colors.blue)
-                            .withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(14),
+                        color: accent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
                       child: Icon(
                         isFacility
                             ? Icons.meeting_room_outlined
                             : Icons.school_outlined,
-                        color: isFacility ? Colors.purple : Colors.blue,
+                        color: accent,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -305,39 +329,23 @@ class _ApprovalCardState extends State<_ApprovalCard> {
                             data['department'] ?? 'Booking',
                             style: const TextStyle(
                               fontSize: 17,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                           Text(
                             bookingRequesterName(data),
-                            style: const TextStyle(color: Color(0xFF64748B)),
+                            style: const TextStyle(color: AppColors.muted),
                           ),
                         ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const Text(
-                        'Pending',
-                        style: TextStyle(
-                          color: Color(0xFFB45309),
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
+                    const AppPill(label: 'Pending', color: AppColors.amber),
                   ],
                 ),
                 const SizedBox(height: 14),
                 Text(
                   bookingRequesterEmail(data),
-                  style: const TextStyle(color: Color(0xFF64748B)),
+                  style: const TextStyle(color: AppColors.muted),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -345,7 +353,7 @@ class _ApprovalCardState extends State<_ApprovalCard> {
                     const Icon(
                       Icons.calendar_month_outlined,
                       size: 16,
-                      color: Color(0xFF2563EB),
+                      color: AppColors.primary,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
@@ -362,7 +370,7 @@ class _ApprovalCardState extends State<_ApprovalCard> {
                     const Icon(
                       Icons.schedule_outlined,
                       size: 16,
-                      color: Color(0xFF2563EB),
+                      color: AppColors.primary,
                     ),
                     const SizedBox(width: 6),
                     Text('${formatDurationReadable(startsInMins)} until start'),
@@ -374,7 +382,7 @@ class _ApprovalCardState extends State<_ApprovalCard> {
                     const Icon(
                       Icons.timer_outlined,
                       size: 16,
-                      color: Color(0xFF059669),
+                      color: AppColors.green,
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -384,7 +392,7 @@ class _ApprovalCardState extends State<_ApprovalCard> {
                     const Icon(
                       Icons.auto_graph_outlined,
                       size: 16,
-                      color: Color(0xFFF59E0B),
+                      color: AppColors.amber,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
@@ -398,7 +406,7 @@ class _ApprovalCardState extends State<_ApprovalCard> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
                   child: Text(
                     data['serviceDetails'] ?? 'No additional details provided.',
@@ -459,14 +467,14 @@ class _EmptyApprovals extends StatelessWidget {
             Icon(
               Icons.verified_outlined,
               size: 72,
-              color: Colors.grey.shade300,
+            color: Colors.grey.shade300,
             ),
             const SizedBox(height: 12),
             Text(
               isAdmin
                   ? 'No bookings waiting for approval.'
                   : 'No pending requests.',
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
             Text(
@@ -474,7 +482,7 @@ class _EmptyApprovals extends StatelessWidget {
                   ? 'New student and staff requests will appear here.'
                   : 'Your new requests will appear here until admin approves them.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF64748B)),
+              style: const TextStyle(color: AppColors.muted),
             ),
           ],
         ),
