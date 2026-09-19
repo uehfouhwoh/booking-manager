@@ -405,6 +405,64 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
+  void _showSheet(BuildContext context) {
+    String type = 'Feedback';
+    final controller = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: type,
+                items: ['Feedback', 'Complaint']
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList(),
+                onChanged: (val) => setModalState(() => type = val!),
+                decoration: const InputDecoration(labelText: 'Type'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Message'),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  await FirebaseFirestore.instance.collection('feedback').add({
+                    'type': type,
+                    'message': controller.text.trim(),
+                    'timestamp': FieldValue.serverTimestamp(),
+                    'authorUid': FirebaseAuth.instance.currentUser?.uid,
+                    'email': FirebaseAuth.instance.currentUser?.email,
+                  });
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Feedback submitted.')),
+                    );
+                  }
+                },
+                child: const Text('Submit'),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoadingRole) {
@@ -419,7 +477,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
         : _dbService.getDepartments();
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        actions: [
+          if (_isStaff)
+            TextButton.icon(
+              icon: const Icon(Icons.feedback_outlined),
+              onPressed: () => _showSheet(context),
+              label: const Text('Provide feedback'),
+            ),
+        ],
+      ),
       body: StreamBuilder<List<String>>(
         stream: optionsStream,
         builder: (context, optionsSnapshot) {
@@ -459,7 +527,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           date.day == _selectedDate.day;
                       if (!sameDay) return false;
                       if (_isAdmin) return true;
-                      if (_isStaff) return false;
                       return bookingBelongsTo(
                             data,
                             email: user?.email,
