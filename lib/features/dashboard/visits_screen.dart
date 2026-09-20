@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../../core/app_design.dart';
 import '../../core/app_helpers.dart';
@@ -18,11 +21,171 @@ class _VisitsScreenState extends State<VisitsScreen> {
   final DatabaseService _dbService = DatabaseService();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String _statusFilter = 'All';
+  String _roleFilter = 'All';
+
+  static const _statusOptions = [
+    'All', 'Pending', 'Booked', 'Waitlist', 'Serving', 'Completed',
+    'Cancelled', 'Rejected',
+  ];
+  static const _roleOptions = ['All', 'Student', 'Staff'];
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  List<QueryDocumentSnapshot> _applyFilters(List<QueryDocumentSnapshot> docs) {
+    return docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+
+      if (_searchQuery.isNotEmpty) {
+        final haystack = [
+          bookingRequesterName(data),
+          bookingRequesterEmail(data),
+          bookingRequesterRole(data),
+          data['department'],
+          data['status'],
+        ].join(' ').toLowerCase();
+        if (!haystack.contains(_searchQuery)) return false;
+      }
+
+      if (_statusFilter != 'All' && data['status'] != _statusFilter) {
+        return false;
+      }
+
+      if (_roleFilter != 'All') {
+        final role = bookingRequesterRole(data);
+        if (_roleFilter == 'Staff' && role != 'staff') return false;
+        if (_roleFilter == 'Student' && role != 'student') return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  Future<void> _exportPdf(List<QueryDocumentSnapshot> docs) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        header: (_) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Booking Records Report',
+              style: pw.TextStyle(
+                fontSize: 20,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              'Generated: ${DateFormat('EEE, MMM d yyyy – h:mm a').format(DateTime.now())}',
+              style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+            ),
+            pw.Text(
+              'Total records: ${docs.length}',
+              style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+            ),
+            pw.SizedBox(height: 12),
+            pw.Divider(),
+          ],
+        ),
+        build: (_) => docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final scheduled = data['scheduledTime'];
+          final dateText = scheduled is Timestamp
+              ? DateFormat('EEE, MMM d yyyy – h:mm a').format(scheduled.toDate())
+              : 'No scheduled time';
+          final status = data['status'] ?? 'Unknown';
+          final role = bookingRequesterRole(data);
+
+          return pw.Container(
+            margin: const pw.EdgeInsets.only(bottom: 12),
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey300),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      bookingRequesterName(data),
+                      style: pw.TextStyle(
+                        fontSize: 13,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.Text(
+                      status,
+                      style: pw.TextStyle(
+                        fontSize: 11,
+                        fontWeight: pw.FontWeight.bold,
+                        color: _pdfStatusColor(status),
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  bookingRequesterEmail(data),
+                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Department: ${data['department'] ?? 'N/A'}   '
+                  'Role: ${role[0].toUpperCase()}${role.substring(1)}',
+                  style: const pw.TextStyle(fontSize: 10),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Scheduled: $dateText',
+                  style: const pw.TextStyle(fontSize: 10),
+                ),
+                if ((data['serviceDetails'] ?? '').toString().isNotEmpty) ...[
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'Details: ${data['serviceDetails']}',
+                    style: const pw.TextStyle(
+                      fontSize: 10,
+                      color: PdfColors.grey700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+
+    await Printing.layoutPdf(onLayout: (_) => pdf.save());
+  }
+
+  PdfColor _pdfStatusColor(String status) {
+    switch (status) {
+      case 'Completed':
+        return PdfColors.green700;
+      case 'Booked':
+      case 'Serving':
+        return PdfColors.blue700;
+      case 'Pending':
+      case 'Waitlist':
+        return PdfColors.amber700;
+      case 'Cancelled':
+      case 'Rejected':
+        return PdfColors.red700;
+      default:
+        return PdfColors.grey600;
+    }
   }
 
   void _showEditBookingSheet(String docId, Map<String, dynamic> data) async {
@@ -121,23 +284,17 @@ class _VisitsScreenState extends State<VisitsScreen> {
                     DropdownButtonFormField<String>(
                       initialValue: selectedStatus,
                       decoration: const InputDecoration(labelText: 'Status'),
-                      items:
-                          const [
-                                'Pending',
-                                'Booked',
-                                'Waitlist',
-                                'Serving',
-                                'Completed',
-                                'Cancelled',
-                                'Rejected',
-                              ]
-                              .map(
-                                (status) => DropdownMenuItem(
-                                  value: status,
-                                  child: Text(status),
-                                ),
-                              )
-                              .toList(),
+                      items: const [
+                        'Pending', 'Booked', 'Waitlist', 'Serving',
+                        'Completed', 'Cancelled', 'Rejected',
+                      ]
+                          .map(
+                            (status) => DropdownMenuItem(
+                              value: status,
+                              child: Text(status),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (value) =>
                           setModalState(() => selectedStatus = value!),
                     ),
@@ -252,83 +409,128 @@ class _VisitsScreenState extends State<VisitsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Admin Booking Command')),
-      body: ResponsivePageFrame(
-        child: Column(
-          children: [
-            const _AdminDataHeader(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: TextField(
-                controller: _searchController,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  labelText: 'Search name, email, department, or status',
-                ),
-                onChanged: (value) =>
-                    setState(() => _searchQuery = value.toLowerCase()),
+    return StreamBuilder<QuerySnapshot>(
+      stream: _dbService.getLiveQueue(),
+      builder: (context, snapshot) {
+        final allDocs = snapshot.data?.docs ?? [];
+        final filteredDocs = _applyFilters(allDocs);
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Admin Booking Command'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                tooltip: 'Export PDF',
+                onPressed: filteredDocs.isEmpty
+                    ? null
+                    : () => _exportPdf(filteredDocs),
               ),
-            ),
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: _dbService.getLiveQueue(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text('Error loading bookings: ${snapshot.error}'),
-                    );
-                  }
-
-                  var docs = snapshot.data?.docs ?? [];
-                  if (_searchQuery.isNotEmpty) {
-                    docs = docs.where((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final haystack = [
-                        bookingRequesterName(data),
-                        bookingRequesterEmail(data),
-                        bookingRequesterRole(data),
-                        data['department'],
-                        data['status'],
-                      ].join(' ').toLowerCase();
-                      return haystack.contains(_searchQuery);
-                    }).toList();
-                  }
-
-                  if (docs.isEmpty) {
-                    return const Center(
-                      child: Text('No booking records found.'),
-                    );
-                  }
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final doc = docs[index];
-                      final data = doc.data() as Map<String, dynamic>;
-                      return _BookingAdminCard(
-                        docId: doc.id,
-                        data: data,
-                        onEdit: () => _showEditBookingSheet(doc.id, data),
-                        onDelete: () => _confirmDelete(
-                          doc.id,
-                          bookingRequesterName(data),
+            ],
+          ),
+          body: ResponsivePageFrame(
+            child: Column(
+              children: [
+                const _AdminDataHeader(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      labelText: 'Search name, email, department, or status',
+                    ),
+                    onChanged: (value) =>
+                        setState(() => _searchQuery = value.toLowerCase()),
+                  ),
+                ),
+                // Status filter chips
+                SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: _statusOptions.map((s) {
+                      final selected = _statusFilter == s;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          label: Text(s),
+                          selected: selected,
+                          onSelected: (_) =>
+                              setState(() => _statusFilter = s),
                         ),
-                        onStatusChanged: (status) =>
-                            _changeStatus(doc.id, status),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Role filter chips
+                SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: _roleOptions.map((r) {
+                      final selected = _roleFilter == r;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          label: Text(r),
+                          selected: selected,
+                          onSelected: (_) =>
+                              setState(() => _roleFilter = r),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Builder(
+                    builder: (_) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                              'Error loading bookings: ${snapshot.error}'),
+                        );
+                      }
+                      if (filteredDocs.isEmpty) {
+                        return const Center(
+                          child: Text('No booking records found.'),
+                        );
+                      }
+                      return ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: filteredDocs.length,
+                        itemBuilder: (context, index) {
+                          final doc = filteredDocs[index];
+                          final data = doc.data() as Map<String, dynamic>;
+                          return _BookingAdminCard(
+                            docId: doc.id,
+                            data: data,
+                            onEdit: () =>
+                                _showEditBookingSheet(doc.id, data),
+                            onDelete: () => _confirmDelete(
+                              doc.id,
+                              bookingRequesterName(data),
+                            ),
+                            onStatusChanged: (status) =>
+                                _changeStatus(doc.id, status),
+                          );
+                        },
                       );
                     },
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -374,7 +576,8 @@ class _BookingAdminCard extends StatelessWidget {
         ? DateFormat('EEE, MMM d - h:mm a').format(scheduledTime.toDate())
         : 'No scheduled time';
     final canComplete = status == 'Booked' || status == 'Serving';
-    final roleColor = requesterRole == 'staff' ? AppColors.purple : AppColors.teal;
+    final roleColor =
+        requesterRole == 'staff' ? AppColors.purple : AppColors.teal;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
