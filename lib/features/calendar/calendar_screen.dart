@@ -3,7 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/app_design.dart';
 import '../../core/app_helpers.dart';
+import '../../core/responsive_page.dart';
 import '../../services/database_service.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -49,7 +51,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final serviceDetailsController = TextEditingController();
     final bookingType = _isStaff ? 'staffFacility' : 'studentService';
     final options = _isStaff
-        ? await _dbService.getDepartmentsOnce()
+        ? await _dbService.getFacilitiesOnce()
         : await _dbService.getDepartmentsOnce();
     if (options.isEmpty) {
       if (mounted) {
@@ -415,108 +417,113 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final title = _isStaff ? 'Staff Facilities' : 'Student Booking';
     final bookingType = _isStaff ? 'staffFacility' : 'studentService';
     final optionsStream = _isStaff
-        ? _dbService.getDepartments()
+        ? _dbService.getFacilities()
         : _dbService.getDepartments();
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+      ),
       body: StreamBuilder<List<String>>(
         stream: optionsStream,
         builder: (context, optionsSnapshot) {
           final serviceOptions =
               optionsSnapshot.data ??
               (_isStaff
-                  ? DatabaseService.defaultDepartments
+                  ? DatabaseService.staffFacilities
                   : DatabaseService.defaultDepartments);
 
-          return Column(
-            children: [
-              _RoleBookingHeader(isStaff: _isStaff),
-              _DateScroller(
-                selectedDate: _selectedDate,
-                onChanged: (date) => setState(() => _selectedDate = date),
-              ),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: _dbService.getQueueForRole(
-                    role: _role,
-                    email: user?.email ?? '',
-                  ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    final docs = snapshot.data?.docs ?? [];
-                    final visibleBookings = docs.where((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final scheduled = data['scheduledTime'];
-                      if (scheduled is! Timestamp) return false;
-                      final date = scheduled.toDate();
-                      final sameDay =
-                          date.year == _selectedDate.year &&
-                          date.month == _selectedDate.month &&
-                          date.day == _selectedDate.day;
-                      if (!sameDay) return false;
-                      if (_isAdmin) return true;
-                      if (_isStaff) return false;
-                      return bookingBelongsTo(
-                            data,
-                            email: user?.email,
-                            uid: user?.uid,
-                          ) &&
-                          !bookingHiddenFor(
-                            data,
-                            email: user?.email,
-                            uid: user?.uid,
-                          );
-                    }).toList();
-
-                    visibleBookings.sort((a, b) {
-                      final dataA = a.data() as Map<String, dynamic>;
-                      final dataB = b.data() as Map<String, dynamic>;
-                      final timeA = dataA['scheduledTime'] as Timestamp;
-                      final timeB = dataB['scheduledTime'] as Timestamp;
-                      return timeA.compareTo(timeB);
-                    });
-
-                    return Column(
-                      children: [
-                        _AvailabilityStrip(
-                          docs: docs,
-                          selectedDate: _selectedDate,
-                          options: serviceOptions,
-                          bookingType: bookingType,
-                          isStaff: _isStaff,
-                        ),
-                        Expanded(
-                          child: visibleBookings.isEmpty
-                              ? _EmptyBookings(isStaff: _isStaff)
-                              : ListView.builder(
-                                  padding: const EdgeInsets.all(16),
-                                  itemCount: visibleBookings.length,
-                                  itemBuilder: (context, index) {
-                                    final doc = visibleBookings[index];
-                                    final data =
-                                        doc.data() as Map<String, dynamic>;
-                                    return _BookingCard(
-                                      docId: doc.id,
-                                      data: data,
-                                      canCancel: !_isAdmin,
-                                      onCancel: () =>
-                                          _showCancelDialog(doc.id, data),
-                                      onComplete: () =>
-                                          _showCompleteDialog(doc.id, data),
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
-                    );
-                  },
+          return ResponsivePageFrame(
+            child: Column(
+              children: [
+                _RoleBookingHeader(isStaff: _isStaff),
+                _DateScroller(
+                  selectedDate: _selectedDate,
+                  onChanged: (date) => setState(() => _selectedDate = date),
                 ),
-              ),
-            ],
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: _isStaff
+                        ? _dbService.getLiveQueue()
+                        : _dbService.getQueueForRole(
+                            role: _role,
+                            email: user?.email ?? '',
+                          ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final docs = snapshot.data?.docs ?? [];
+                      final visibleBookings = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final scheduled = data['scheduledTime'];
+                        if (scheduled is! Timestamp) return false;
+                        final date = scheduled.toDate();
+                        final sameDay =
+                            date.year == _selectedDate.year &&
+                            date.month == _selectedDate.month &&
+                            date.day == _selectedDate.day;
+                        if (!sameDay) return false;
+                        if (_isAdmin) return true;
+                        return bookingBelongsTo(
+                              data,
+                              email: user?.email,
+                              uid: user?.uid,
+                            ) &&
+                            !bookingHiddenFor(
+                              data,
+                              email: user?.email,
+                              uid: user?.uid,
+                            );
+                      }).toList();
+
+                      visibleBookings.sort((a, b) {
+                        final dataA = a.data() as Map<String, dynamic>;
+                        final dataB = b.data() as Map<String, dynamic>;
+                        final timeA = dataA['scheduledTime'] as Timestamp;
+                        final timeB = dataB['scheduledTime'] as Timestamp;
+                        return timeA.compareTo(timeB);
+                      });
+
+                      return Column(
+                        children: [
+                          _AvailabilityStrip(
+                            docs: docs,
+                            selectedDate: _selectedDate,
+                            options: serviceOptions,
+                            bookingType: bookingType,
+                            isStaff: _isStaff,
+                          ),
+                          Expanded(
+                            child: visibleBookings.isEmpty
+                                ? _EmptyBookings(isStaff: _isStaff)
+                                : ListView.builder(
+                                    padding: const EdgeInsets.all(16),
+                                    itemCount: visibleBookings.length,
+                                    itemBuilder: (context, index) {
+                                      final doc = visibleBookings[index];
+                                      final data =
+                                          doc.data() as Map<String, dynamic>;
+                                      return _BookingCard(
+                                        docId: doc.id,
+                                        data: data,
+                                        canCancel: !_isAdmin,
+                                        onCancel: () =>
+                                            _showCancelDialog(doc.id, data),
+                                        onComplete: () =>
+                                            _showCompleteDialog(doc.id, data),
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -638,21 +645,15 @@ class _RoleBookingHeader extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 10, 16, 2),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [color, accent],
+          colors: [color, AppColors.ink, accent],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.18),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        boxShadow: AppShadow.soft(color),
       ),
       child: Row(
         children: [
@@ -661,7 +662,7 @@ class _RoleBookingHeader extends StatelessWidget {
             width: 54,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             child: Icon(
               isStaff ? Icons.meeting_room_outlined : Icons.school_outlined,
@@ -679,7 +680,7 @@ class _RoleBookingHeader extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 19,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -734,15 +735,16 @@ class _AvailabilityStrip extends StatelessWidget {
             child: Container(
               width: 178,
               margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
                 border: Border.all(
                   color: count == 0
                       ? const Color(0xFFBBF7D0)
                       : const Color(0xFFBFDBFE),
                 ),
+                boxShadow: AppShadow.soft(color),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -756,7 +758,7 @@ class _AvailabilityStrip extends StatelessWidget {
                     service,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -915,22 +917,27 @@ class _BookingCard extends StatelessWidget {
         0;
 
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       onTap: () => _showBookingDetails(context, scheduledDate, service, status),
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  CircleAvatar(
-                    backgroundColor: serviceColor(
-                      service,
-                      bookingType: bookingType,
-                    ).withValues(alpha: 0.12),
+                  Container(
+                    height: 46,
+                    width: 46,
+                    decoration: BoxDecoration(
+                      color: serviceColor(
+                        service,
+                        bookingType: bookingType,
+                      ).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
                     child: Icon(
                       serviceIcon(service, bookingType: bookingType),
                       color: serviceColor(service, bookingType: bookingType),
@@ -943,7 +950,7 @@ class _BookingCard extends StatelessWidget {
                       children: [
                         Text(
                           service,
-                          style: const TextStyle(fontWeight: FontWeight.w900),
+                          style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -953,7 +960,7 @@ class _BookingCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  _StatusPill(label: status, color: color),
+                  AppPill(label: status, color: color),
                 ],
               ),
               const SizedBox(height: 12),
@@ -1088,7 +1095,7 @@ class _ReasonBox extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFFEF2F2),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: const Color(0xFFFECACA)),
       ),
       child: Text(
@@ -1096,32 +1103,6 @@ class _ReasonBox extends StatelessWidget {
         style: const TextStyle(
           color: Color(0xFF991B1B),
           fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w900,
         ),
       ),
     );
