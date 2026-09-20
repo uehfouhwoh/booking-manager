@@ -828,7 +828,14 @@ class DatabaseService {
     if (!doc.exists) {
       await docRef.set({
         'departments': defaultDepartments,
-        'facilities': ['Meeting Room', 'Computer Lab', 'Lecture Hall', 'Projector Set', 'Recording Studio', 'Event Space'],
+        'facilities': [
+          'Meeting Room',
+          'Computer Lab',
+          'Lecture Hall',
+          'Projector Set',
+          'Recording Studio',
+          'Event Space',
+        ],
         'aiSmartRecommendations': true,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -854,7 +861,15 @@ class DatabaseService {
             .map((value) => value.toString().trim())
             .where((value) => value.isNotEmpty)
             .isEmpty) {
-      updates['facilities'] = ['Meeting Room', 'Computer Lab', 'Lecture Hall', 'Projector Set', 'Recording Studio', 'Event Space'];    }
+      updates['facilities'] = [
+        'Meeting Room',
+        'Computer Lab',
+        'Lecture Hall',
+        'Projector Set',
+        'Recording Studio',
+        'Event Space',
+      ];
+    }
 
     if (!data.containsKey('aiSmartRecommendations')) {
       updates['aiSmartRecommendations'] = true;
@@ -873,7 +888,14 @@ class DatabaseService {
     if (!doc.exists) {
       await docRef.set({
         'departments': [...defaultDepartments, department],
-        'facilities': ['Meeting Room', 'Computer Lab', 'Lecture Hall', 'Projector Set', 'Recording Studio', 'Event Space'],
+        'facilities': [
+          'Meeting Room',
+          'Computer Lab',
+          'Lecture Hall',
+          'Projector Set',
+          'Recording Studio',
+          'Event Space',
+        ],
         'aiSmartRecommendations': true,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -888,6 +910,86 @@ class DatabaseService {
   Future<void> removeDepartment(String department) async {
     await _firestore.collection('settings').doc('campus').update({
       'departments': FieldValue.arrayRemove([department]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<List<String>> getFacilities() {
+    return _firestore.collection('settings').doc('campus').snapshots().map((
+      snapshot,
+    ) {
+      if (snapshot.exists && snapshot.data()!.containsKey('facilities')) {
+        return _cleanOptions(snapshot.data()!['facilities'], [
+          'Meeting Room',
+          'Computer Lab',
+          'Lecture Hall',
+          'Projector Set',
+          'Recording Studio',
+          'Event Space',
+        ]);
+      }
+      return [
+        'Meeting Room',
+        'Computer Lab',
+        'Lecture Hall',
+        'Projector Set',
+        'Recording Studio',
+        'Event Space',
+      ];
+    });
+  }
+
+  Future<List<String>> getFacilitiesOnce() async {
+    final doc = await _firestore.collection('settings').doc('campus').get();
+    if (doc.exists && doc.data()!.containsKey('facilities')) {
+      return _cleanOptions(doc.data()!['facilities'], [
+        'Meeting Room',
+        'Computer Lab',
+        'Lecture Hall',
+        'Projector Set',
+        'Recording Studio',
+        'Event Space',
+      ]);
+    }
+    return [
+      'Meeting Room',
+      'Computer Lab',
+      'Lecture Hall',
+      'Projector Set',
+      'Recording Studio',
+      'Event Space',
+    ];
+  }
+
+  Future<void> addFacility(String facility) async {
+    final docRef = _firestore.collection('settings').doc('campus');
+    final doc = await docRef.get();
+    if (!doc.exists) {
+      await docRef.set({
+        'departments': defaultDepartments,
+        'facilities': [
+          'Meeting Room',
+          'Computer Lab',
+          'Lecture Hall',
+          'Projector Set',
+          'Recording Studio',
+          'Event Space',
+          facility,
+        ],
+        'aiSmartRecommendations': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await docRef.update({
+        'facilities': FieldValue.arrayUnion([facility]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  Future<void> removeFacility(String facility) async {
+    await _firestore.collection('settings').doc('campus').update({
+      'facilities': FieldValue.arrayRemove([facility]),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
