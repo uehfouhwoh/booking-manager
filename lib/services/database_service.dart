@@ -40,6 +40,15 @@ class DatabaseService {
     'Finance',
   ];
 
+  static const List<String> staffFacilities = [
+    'Meeting Room',
+    'Computer Lab',
+    'Lecture Hall',
+    'Projector Set',
+    'Recording Studio',
+    'Event Space',
+  ];
+
   List<String> _cleanOptions(List<dynamic> values, List<String> fallback) {
     final cleaned = values
         .map((value) => value.toString().trim())
@@ -813,12 +822,31 @@ class DatabaseService {
     });
   }
 
+  Stream<List<String>> getFacilities() {
+    return _firestore.collection('settings').doc('campus').snapshots().map((
+      snapshot,
+    ) {
+      if (snapshot.exists && snapshot.data()!.containsKey('facilities')) {
+        return _cleanOptions(snapshot.data()!['facilities'], staffFacilities);
+      }
+      return staffFacilities;
+    });
+  }
+
   Future<List<String>> getDepartmentsOnce() async {
     final doc = await _firestore.collection('settings').doc('campus').get();
     if (doc.exists && doc.data()!.containsKey('departments')) {
       return _cleanOptions(doc.data()!['departments'], defaultDepartments);
     }
     return defaultDepartments;
+  }
+
+  Future<List<String>> getFacilitiesOnce() async {
+    final doc = await _firestore.collection('settings').doc('campus').get();
+    if (doc.exists && doc.data()!.containsKey('facilities')) {
+      return _cleanOptions(doc.data()!['facilities'], staffFacilities);
+    }
+    return staffFacilities;
   }
 
   Future<void> ensureCampusSettings() async {
@@ -828,14 +856,7 @@ class DatabaseService {
     if (!doc.exists) {
       await docRef.set({
         'departments': defaultDepartments,
-        'facilities': [
-          'Meeting Room',
-          'Computer Lab',
-          'Lecture Hall',
-          'Projector Set',
-          'Recording Studio',
-          'Event Space',
-        ],
+        'facilities': staffFacilities,
         'aiSmartRecommendations': true,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -861,14 +882,7 @@ class DatabaseService {
             .map((value) => value.toString().trim())
             .where((value) => value.isNotEmpty)
             .isEmpty) {
-      updates['facilities'] = [
-        'Meeting Room',
-        'Computer Lab',
-        'Lecture Hall',
-        'Projector Set',
-        'Recording Studio',
-        'Event Space',
-      ];
+      updates['facilities'] = staffFacilities;
     }
 
     if (!data.containsKey('aiSmartRecommendations')) {
@@ -888,14 +902,7 @@ class DatabaseService {
     if (!doc.exists) {
       await docRef.set({
         'departments': [...defaultDepartments, department],
-        'facilities': [
-          'Meeting Room',
-          'Computer Lab',
-          'Lecture Hall',
-          'Projector Set',
-          'Recording Studio',
-          'Event Space',
-        ],
+        'facilities': staffFacilities,
         'aiSmartRecommendations': true,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -914,68 +921,14 @@ class DatabaseService {
     });
   }
 
-  Stream<List<String>> getFacilities() {
-    return _firestore.collection('settings').doc('campus').snapshots().map((
-      snapshot,
-    ) {
-      if (snapshot.exists && snapshot.data()!.containsKey('facilities')) {
-        return _cleanOptions(snapshot.data()!['facilities'], [
-          'Meeting Room',
-          'Computer Lab',
-          'Lecture Hall',
-          'Projector Set',
-          'Recording Studio',
-          'Event Space',
-        ]);
-      }
-      return [
-        'Meeting Room',
-        'Computer Lab',
-        'Lecture Hall',
-        'Projector Set',
-        'Recording Studio',
-        'Event Space',
-      ];
-    });
-  }
-
-  Future<List<String>> getFacilitiesOnce() async {
-    final doc = await _firestore.collection('settings').doc('campus').get();
-    if (doc.exists && doc.data()!.containsKey('facilities')) {
-      return _cleanOptions(doc.data()!['facilities'], [
-        'Meeting Room',
-        'Computer Lab',
-        'Lecture Hall',
-        'Projector Set',
-        'Recording Studio',
-        'Event Space',
-      ]);
-    }
-    return [
-      'Meeting Room',
-      'Computer Lab',
-      'Lecture Hall',
-      'Projector Set',
-      'Recording Studio',
-      'Event Space',
-    ];
-  }
-
   Future<void> addFacility(String facility) async {
     final docRef = _firestore.collection('settings').doc('campus');
     final doc = await docRef.get();
+
     if (!doc.exists) {
       await docRef.set({
         'departments': defaultDepartments,
-        'facilities': [
-          'Meeting Room',
-          'Computer Lab',
-          'Lecture Hall',
-          'Projector Set',
-          'Recording Studio',
-          'Event Space',
-          facility,
-        ],
+        'facilities': [...staffFacilities, facility],
         'aiSmartRecommendations': true,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -991,6 +944,159 @@ class DatabaseService {
     await _firestore.collection('settings').doc('campus').update({
       'facilities': FieldValue.arrayRemove([facility]),
       'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<QuerySnapshot> getAnnouncements() {
+    return _firestore
+        .collection('announcements')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  Future<void> saveAnnouncement({
+    String? docId,
+    required String title,
+    required String description,
+    required String type,
+    required String authorName,
+    required String authorUid,
+    required String authorEmail,
+    required String authorRole,
+    DateTime? eventDate,
+  }) async {
+    final data = {
+      'title': title,
+      'description': description,
+      'type': type,
+      'authorName': authorName,
+      'authorUid': authorUid,
+      'authorEmail': authorEmail,
+      'authorRole': authorRole,
+      'eventDate': eventDate,
+      'isActive': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (docId == null) {
+      await _firestore.collection('announcements').add({
+        ...data,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await _firestore
+          .collection('announcements')
+          .doc(docId)
+          .set(data, SetOptions(merge: true));
+    }
+  }
+
+  Future<void> deleteAnnouncement(String docId) async {
+    await _firestore.collection('announcements').doc(docId).delete();
+  }
+
+  Stream<QuerySnapshot> getBlogPosts() {
+    return _firestore
+        .collection('blogPosts')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  Future<void> saveBlogPost({
+    String? docId,
+    required String title,
+    required String body,
+    required String visibility,
+    String imageUrl = '',
+    required String authorName,
+    required String authorUid,
+    required String authorEmail,
+    required String authorRole,
+  }) async {
+    final data = {
+      'title': title,
+      'body': body,
+      'visibility': visibility,
+      'imageUrl': imageUrl,
+      'authorName': authorName,
+      'authorUid': authorUid,
+      'authorEmail': authorEmail,
+      'authorRole': authorRole,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (docId == null) {
+      await _firestore.collection('blogPosts').add({
+        ...data,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await _firestore
+          .collection('blogPosts')
+          .doc(docId)
+          .set(data, SetOptions(merge: true));
+    }
+  }
+
+  Future<void> deleteBlogPost(String docId) async {
+    await _firestore.collection('blogPosts').doc(docId).delete();
+  }
+
+  Stream<QuerySnapshot> getFeedback() {
+    return _firestore
+        .collection('feedback')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  Future<void> submitFeedback({
+    required String category,
+    required String message,
+    required String authorName,
+    required String authorUid,
+    required String authorEmail,
+    required String authorRole,
+  }) async {
+    await _firestore.collection('feedback').add({
+      'category': category,
+      'message': message,
+      'authorName': authorName,
+      'authorUid': authorUid,
+      'authorEmail': authorEmail,
+      'authorRole': authorRole,
+      'status': 'Open',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> updateFeedbackStatus(String docId, String status) async {
+    await _firestore.collection('feedback').doc(docId).update({
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<QuerySnapshot> getGroupMessages() {
+    return _firestore
+        .collection('groupMessages')
+        .orderBy('createdAt', descending: true)
+        .limit(80)
+        .snapshots();
+  }
+
+  Future<void> sendGroupMessage({
+    required String message,
+    required String authorName,
+    required String authorUid,
+    required String authorEmail,
+    required String authorRole,
+  }) async {
+    await _firestore.collection('groupMessages').add({
+      'message': message,
+      'authorName': authorName,
+      'authorUid': authorUid,
+      'authorEmail': authorEmail,
+      'authorRole': authorRole,
+      'createdAt': FieldValue.serverTimestamp(),
     });
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/app_helpers.dart';
+import '../../core/responsive_page.dart';
 import '../../services/database_service.dart';
 
 class BookingHistoryScreen extends StatefulWidget {
@@ -110,7 +111,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       appBar: AppBar(
         title: Text(widget.showHidden ? 'Hidden Bookings' : 'Booking History'),
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: ResponsivePageFrame(
+        child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('queue')
             .orderBy('joinedAt', descending: false)
@@ -187,6 +189,7 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
             },
           );
         },
+        ),
       ),
     );
   }

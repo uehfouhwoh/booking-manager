@@ -5,10 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'visits_screen.dart';
 import '../calendar/booking_requests_screen.dart';
 import '../calendar/calendar_screen.dart';
+import '../analytics/stats_screen.dart';
 import '../community/campus_hub_screen.dart';
-import '../info/info_screen.dart';
 import '../profile/profile_screen.dart';
-import '../student/student_home_screen.dart';
+import '../../core/app_design.dart';
 import '../../services/auth_service.dart';
 
 class MainLayout extends StatefulWidget {
@@ -56,96 +56,225 @@ class _MainLayoutState extends State<MainLayout> {
 
     final isAdmin = _role == 'admin';
     final isStaff = _role == 'staff' || _role == 'lecturer';
+    final roleLabel = isAdmin
+        ? 'Administrator'
+        : isStaff
+        ? 'Lecturer / Staff'
+        : 'Student';
 
     final screens = isAdmin
-        ? const [VisitsScreen(), BookingRequestsScreen(), ProfileScreen()]
-        : isStaff
-        ? const [CalendarScreen(), CampusHubScreen(), InfoScreen(), ProfileScreen()]
-        : const [
-            StudentHomeScreen(),
-            CalendarScreen(),
+        ? const [
             CampusHubScreen(),
-            InfoScreen(),
+            VisitsScreen(),
+            BookingRequestsScreen(),
+            StatsScreen(),
+            ProfileScreen(),
+          ]
+        : isStaff
+        ? const [
+            CampusHubScreen(),
+            CalendarScreen(),
+            StatsScreen(),
+            ProfileScreen(),
+          ]
+        : const [
+            CampusHubScreen(),
+            CalendarScreen(),
+            StatsScreen(),
             ProfileScreen(),
           ];
 
     final items = isAdmin
         ? const [
-            NavigationDestination(
+            BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard_customize_outlined),
+              label: 'Hub',
+            ),
+            BottomNavigationBarItem(
               icon: Icon(Icons.admin_panel_settings_outlined),
-              selectedIcon: Icon(Icons.admin_panel_settings),
               label: 'Manage',
             ),
-            NavigationDestination(
+            BottomNavigationBarItem(
               icon: Icon(Icons.fact_check_outlined),
-              selectedIcon: Icon(Icons.fact_check),
               label: 'Approvals',
             ),
-            NavigationDestination(
+            BottomNavigationBarItem(
+              icon: Icon(Icons.query_stats_outlined),
+              label: 'Insights',
+            ),
+            BottomNavigationBarItem(
               icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
               label: 'Profile',
             ),
           ]
         : isStaff
         ? const [
-            NavigationDestination(
+            BottomNavigationBarItem(
+              icon: Icon(Icons.info_outline),
+              label: 'Hub',
+            ),
+            BottomNavigationBarItem(
               icon: Icon(Icons.meeting_room_outlined),
-              selectedIcon: Icon(Icons.meeting_room),
               label: 'Facilities',
             ),
-            NavigationDestination(
-              icon: Icon(Icons.campaign_outlined),
-              selectedIcon: Icon(Icons.campaign),
-              label: 'Campus Hub',
+            BottomNavigationBarItem(
+              icon: Icon(Icons.query_stats_outlined),
+              label: 'Insights',
             ),
-            NavigationDestination(
-              icon: Icon(Icons.info_outline),
-              selectedIcon: Icon(Icons.info),
-              label: 'Info',
-            ),
-            NavigationDestination(
+            BottomNavigationBarItem(
               icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
               label: 'Profile',
             ),
           ]
         : const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: 'Home',
+            BottomNavigationBarItem(
+              icon: Icon(Icons.info_outline),
+              label: 'Hub',
             ),
-            NavigationDestination(
+            BottomNavigationBarItem(
               icon: Icon(Icons.edit_calendar_outlined),
-              selectedIcon: Icon(Icons.edit_calendar),
               label: 'Booking',
             ),
-            NavigationDestination(
-              icon: Icon(Icons.campaign_outlined),
-              selectedIcon: Icon(Icons.campaign),
-              label: 'Campus Hub',
+            BottomNavigationBarItem(
+              icon: Icon(Icons.query_stats_outlined),
+              label: 'Insights',
             ),
-            NavigationDestination(
-              icon: Icon(Icons.info_outline),
-              selectedIcon: Icon(Icons.info),
-              label: 'Info',
-            ),
-            NavigationDestination(
+            BottomNavigationBarItem(
               icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
               label: 'Profile',
             ),
           ];
 
-    return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: screens),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
-        height: 76,
-        destinations: items,
+    final destinations = items
+        .map(
+          (item) => NavigationDestination(
+            icon: item.icon,
+            selectedIcon: item.activeIcon,
+            label: item.label ?? '',
+          ),
+        )
+        .toList();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useRail = constraints.maxWidth >= 920;
+        if (!useRail) {
+          return Scaffold(
+            body: screens[_currentIndex],
+            bottomNavigationBar: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                boxShadow: AppShadow.soft(),
+                border: const Border(top: BorderSide(color: AppColors.line)),
+              ),
+              child: NavigationBar(
+                selectedIndex: _currentIndex,
+                onDestinationSelected: (index) {
+                  setState(() => _currentIndex = index);
+                },
+                height: 72,
+                destinations: destinations,
+              ),
+            ),
+          );
+        }
+
+        return Scaffold(
+          body: Row(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border(right: BorderSide(color: AppColors.line)),
+                ),
+                child: NavigationRail(
+                  selectedIndex: _currentIndex,
+                  onDestinationSelected: (index) {
+                    setState(() => _currentIndex = index);
+                  },
+                  extended: constraints.maxWidth >= 1180,
+                  minExtendedWidth: 214,
+                  leading: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 18, 14, 22),
+                    child: _RailBrand(
+                      extended: constraints.maxWidth >= 1180,
+                      roleLabel: roleLabel,
+                    ),
+                  ),
+                  destinations: items
+                      .map(
+                        (item) => NavigationRailDestination(
+                          icon: item.icon,
+                          selectedIcon: item.activeIcon,
+                          label: Text(item.label ?? ''),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              Expanded(child: screens[_currentIndex]),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RailBrand extends StatelessWidget {
+  const _RailBrand({required this.extended, required this.roleLabel});
+
+  final bool extended;
+  final String roleLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final mark = Container(
+      height: 46,
+      width: 46,
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
+      child: const Icon(Icons.event_available_outlined, color: Colors.white),
+    );
+
+    if (!extended) return mark;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        mark,
+        const SizedBox(width: 12),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'FlowSlot',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                roleLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
